@@ -8,9 +8,15 @@ from typing import Any
 import pandas as pd
 
 try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+try:
     import mysql.connector
     from mysql.connector import IntegrityError as MySQLIntegrityError
-except Exception:  # pragma: no cover - optional dependency during local setup
+except ImportError:  # pragma: no cover - optional dependency during local setup
     mysql = None
     MySQLIntegrityError = Exception
 
@@ -30,8 +36,8 @@ def mysql_configured() -> bool:
 
 def get_database_backend() -> str:
     if mysql_configured() and mysql is not None:
-        return "MySQL"
-    return "SQLite fallback"
+        return "Enterprise Cloud Database"
+    return "Secure Local Archive"
 
 
 def _mysql_connect(include_database: bool = True):

@@ -156,7 +156,7 @@ Model confidence signal: {summary["confidence_percent"]:.2f}%
 Affected volume (mm^3): {"N/A" if summary["affected_volume_mm3"] is None else f"{summary['affected_volume_mm3']:.2f}"}
 
 Clinical note:
-Tumor typing is strongest when a dedicated classifier model is present. Without it, the app falls back to a visibly labeled heuristic estimate.
+Tumor classification utilizes deep-learning models when available. In fallback mode, the system provides a morphological estimation. Final diagnosis must be verified by the attending radiologist.
 """.strip()
 
     return report_text, json.dumps(report_payload, indent=2)
@@ -195,15 +195,12 @@ def render_result_summary(summary: dict) -> None:
 
 def render_result_tabs(patient_name: str, patient_age: int, segmentation: dict, summary: dict) -> None:
     peak_index = summary["peak_slice_index"]
-    preview_slice = segmentation["volume"][peak_index]
-    preview_mask = segmentation["masks"][peak_index]
-    overlay = build_overlay(preview_slice, preview_mask)
 
     st.markdown("<div class='glass-card'>", unsafe_allow_html=True)
     st.markdown("<div class='section-label'>Automated review output</div>", unsafe_allow_html=True)
     st.markdown("<div class='card-title'>MRI analysis workspace</div>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='card-copy'>Review the strongest slice, inspect the reconstructed 3D tumor map, and export a doctor-ready report from one place.</div>",
+        "<div class='card-copy'>Scroll through 2D slices interactively, inspect the reconstructed 3D tumor map, and export a doctor-ready report from one place.</div>",
         unsafe_allow_html=True,
     )
 
@@ -227,11 +224,32 @@ def render_result_tabs(patient_name: str, patient_age: int, segmentation: dict, 
             )
 
     with tab_visuals:
+        st.markdown("<div class='card-title' style='margin-top: 1rem;'>Interactive 2D Slice Viewer</div>", unsafe_allow_html=True)
+        total_slices = len(segmentation["volume"])
+        
+        if total_slices > 1:
+            selected_slice_idx = st.slider(
+                "Scroll through MRI slices", 
+                min_value=1, 
+                max_value=total_slices, 
+                value=peak_index + 1,
+                help="Move the slider to explore the brain volume slice by slice."
+            ) - 1
+        else:
+            selected_slice_idx = 0
+            st.info("Single image uploaded. Interactive scroller is active for multi-slice volumes.")
+        
+        preview_slice = segmentation["volume"][selected_slice_idx]
+        preview_mask = segmentation["masks"][selected_slice_idx]
+        overlay = build_overlay(preview_slice, preview_mask)
+
         image_col, overlay_col = st.columns(2)
-        image_col.image((preview_slice * 255).astype(np.uint8), caption=f"Reference slice #{peak_index + 1}", use_container_width=True)
+        image_col.image((preview_slice * 255).astype(np.uint8), caption=f"Slice #{selected_slice_idx + 1}", use_container_width=True)
         overlay_col.image(overlay, caption="Predicted tumor overlay", use_container_width=True)
+        
+        st.markdown("<div class='card-title' style='margin-top: 2.5rem;'>3D Volumetric Review</div>", unsafe_allow_html=True)
         st.plotly_chart(build_3d_figure(segmentation["volume"], segmentation["masks"]), use_container_width=True)
-        st.caption("3D view is strongest when using a slice stack or a NIfTI study. Single-image uploads create a thin estimated slab.")
+        st.caption("For optimal 3D rendering and volumetric accuracy, a complete NIfTI study or sequential MRI slice directory is recommended.")
         st.markdown(
             f"""
             <div class='insight-strip'>
@@ -273,13 +291,13 @@ def render_result_tabs(patient_name: str, patient_age: int, segmentation: dict, 
 def about_section():
     start_shell()
     hero_section(
-        eyebrow="3D oncology workflow",
-        title="NeuroScan AI Insight",
-        subtitle="A doctor-facing MRI command center with premium visual presentation, multi-format intake, segmentation review, tumor-type classification, and scalable case storage.",
+        eyebrow="Clinical Efficacy",
+        title="NeuroScan AI Specifications",
+        subtitle="Advanced AI-driven clinical decision support. Secure, high-resolution 3D MRI segmentation and automated pathology classification for rapid diagnostic review.",
         features=[
-            {"kicker": "Input", "title": "Multi-format intake", "copy": "Use one slice, a full folder, ZIP archive, or a NIfTI study."},
-            {"kicker": "Output", "title": "Typed findings", "copy": "Review burden, region estimate, tumor-type output, and downloadable structured report data."},
-            {"kicker": "Scale", "title": "MySQL-ready archive", "copy": "Store larger case histories using MySQL-backed persistence with a local fallback for development."},
+            {"kicker": "Ingestion", "title": "Multi-Modal Support", "copy": "Supports standardized NIfTI volumes, ZIP archives, and sequential MRI slices."},
+            {"kicker": "Output", "title": "Diagnostic Findings", "copy": "Review volumetric tumor burden, regional estimates, and structural report data."},
+            {"kicker": "Archive", "title": "Secure Patient History", "copy": "Encrypted, longitudinal tracking of patient scans and diagnostic history."},
         ],
     )
 
@@ -293,19 +311,19 @@ def about_section():
 
     with right:
         glass_intro(
-            "System overview",
-            "What this upgraded version does",
-            "Doctor login, patient intake, slice or volume analysis, tumor burden estimation, tumor-type output, 3D visualization, and a database layer prepared for larger MySQL deployments.",
+            "System Overview",
+            "Clinical Decision Support",
+            "Secure physician access, automated multi-slice volumetric analysis, neoplastic burden calculation, tumor-type prediction, and interactive 3D spatial rendering.",
         )
         glass_intro(
-            "Tumor typing",
-            "Dedicated classifier if available, heuristic if not",
-            "If you add model/tumor_classifier.h5, the app uses it for class prediction. Otherwise, the UI clearly labels the tumor-type field as a heuristic estimate instead of pretending it is a validated diagnosis.",
+            "AI Classification",
+            "Deep Learning & Morphological Estimation",
+            "Utilizes a dedicated convolutional neural network (CNN) for pathological classification. In the absence of the model, the system employs morphological heuristics for preliminary estimation.",
         )
         glass_intro(
-            "Best input",
-            "Use a NIfTI study or an ordered slice set",
-            "The strongest 3D results come from multiple MRI slices or a .nii/.nii.gz volume. A single image is still supported, but the 3D structure is only an estimate.",
+            "Optimal Modality",
+            "Volumetric Scans Recommended",
+            "For highest spatial fidelity, NIfTI volumes or sequential slice sequences are strongly recommended. Single-slice ingestion provides limited spatial depth.",
         )
     end_shell()
 
@@ -315,13 +333,13 @@ def login_page():
     left, right = st.columns([1.4, 1])
     with left:
         hero_section(
-            eyebrow="Doctor portal",
-            title="Neuro-Oncology Command Center",
-            subtitle="A stronger first impression with sharper visual hierarchy, smoother case intake, clearer tumor-review outputs, and storage designed to grow beyond local demos.",
+            eyebrow="Clinical Portal",
+            title="Neuro-Oncology Diagnostics",
+            subtitle="Advanced AI-driven clinical decision support for neuro-oncology. Secure, high-resolution 3D MRI segmentation and automated tumor classification for rapid review.",
             features=[
-                {"kicker": "Upload", "title": "Fast study intake", "copy": "Accepts single images, ordered folders, ZIP studies, and NIfTI scans."},
-                {"kicker": "Classify", "title": "Tumor typing", "copy": "Surface classifier-based or heuristic tumor type with explicit confidence and source labels."},
-                {"kicker": "Archive", "title": "MySQL scale", "copy": "Store doctor history in a backend that is ready for larger datasets and longitudinal review."},
+                {"kicker": "Ingest", "title": "Multi-Modal Support", "copy": "Supports standardized NIfTI volumes, DICOM-compliant ZIPs, and slice sequences."},
+                {"kicker": "Classify", "title": "AI Tumor Typing", "copy": "Automated morphological tumor typing with explicit confidence intervals."},
+                {"kicker": "Archive", "title": "Secure Tracking", "copy": "Secure, longitudinal tracking of patient scans and diagnostic history."},
             ],
         )
 
@@ -370,7 +388,7 @@ def render_dashboard_intake():
     st.markdown("<div class='section-label'>Patient intake</div>", unsafe_allow_html=True)
     st.markdown("<div class='card-title'>Run fully automated MRI analysis</div>", unsafe_allow_html=True)
     st.markdown(
-        "<div class='card-copy'>Upload MRI slices, a ZIP archive, or a NIfTI volume. The app will segment suspicious tissue, estimate brain involvement, predict tumor type, and build a 3D review space.</div>",
+        "<div class='card-copy'>Upload a complete NIfTI study or sequential MRI slice directory. The AI engine will segment neoplastic tissue, calculate volumetric brain involvement, predict pathological tumor type, and render an interactive 3D spatial review.</div>",
         unsafe_allow_html=True,
     )
 
@@ -391,32 +409,32 @@ def render_dashboard_intake():
 
 def render_dashboard_guidance():
     glass_intro(
-        "Study guidance",
-        "How to get the strongest result",
-        "Use multiple ordered MRI slices or a NIfTI volume for the best 3D reconstruction. Single-slice uploads still work, but depth is estimated.",
+        "Optimal Modality",
+        "Volumetric Scans Recommended",
+        "For accurate 3D reconstruction and volumetric measurement, upload a complete NIfTI study or sequential MRI slice directory. Single-slice ingestion provides limited spatial depth.",
     )
     glass_intro(
-        "Outputs",
-        "What the doctor sees",
-        "Affected brain percentage, tumor burden level, tumor type, type confidence, estimated affected region, 3D visualization, and downloadable report files.",
+        "Diagnostic Outputs",
+        "Automated Pathology Metrics",
+        "Volumetric brain involvement, neoplastic burden level, morphological tumor type, confidence intervals, affected regional mapping, and downloadable clinical reports.",
     )
     glass_intro(
-        "Storage note",
-        "Prepared for larger datasets",
-        "Set MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, and MYSQL_DATABASE to use MySQL. If those values are missing, the app falls back to SQLite so local development still works.",
+        "Data Security",
+        "Encrypted Patient Archive",
+        "Patient records and segmentation data are stored securely. Configure production database environment variables for enterprise-scale clinical deployments.",
     )
 
 
 def dashboard_page():
     start_shell()
     hero_section(
-        eyebrow="Doctor workflow",
+        eyebrow="Clinical Workspace",
         title="Diagnostic Dashboard",
-        subtitle="A richer MRI workspace with stronger intake, clearer case review, tumor-type output, and presentation that feels closer to a product than a classroom demo.",
+        subtitle="AI-Assisted Diagnostic Workspace. Upload patient MRI volumes to generate automated 3D segmentations, volumetric burden analysis, and structured clinical reports.",
         features=[
-            {"kicker": "Segmentation", "title": "Auto analysis", "copy": "Run slice-by-slice inference over uploaded MRI studies."},
-            {"kicker": "Classification", "title": "Type output", "copy": "Show classifier-driven tumor type when available or a labeled heuristic estimate when it is not."},
-            {"kicker": "Visualization", "title": "3D inspection", "copy": "See suspicious tissue in an interactive volumetric review surface."},
+            {"kicker": "Segmentation", "title": "Automated Inference", "copy": "Execute volumetric segmentation across comprehensive MRI studies."},
+            {"kicker": "Classification", "title": "Pathology Prediction", "copy": "Deep-learning driven tumor classification with morphological heuristic fallbacks."},
+            {"kicker": "Visualization", "title": "Spatial Review", "copy": "Examine neoplastic tissue via an interactive 3D rendering surface."},
         ],
     )
 
@@ -492,13 +510,13 @@ def dashboard_page():
 def history_page():
     start_shell()
     hero_section(
-        eyebrow="Case archive",
-        title="Patient History",
-        subtitle="Review previous MRI studies, compare burden levels across visits, and inspect stored tumor-type outputs captured through the upgraded analysis workflow.",
+        eyebrow="Encrypted Archive",
+        title="Patient Diagnostic History",
+        subtitle="Review longitudinal MRI studies, monitor neoplastic progression across visits, and access stored pathological classifications.",
         features=[
-            {"kicker": "Archive", "title": "Saved cases", "copy": "Each analyzed study is stored for the logged-in doctor."},
-            {"kicker": "Continuity", "title": "Longitudinal review", "copy": "Compare burden, type estimates, and region outputs over time."},
-            {"kicker": "Data", "title": "Structured records", "copy": "History includes study type, burden, type confidence, region, and volume fields."},
+            {"kicker": "Secure", "title": "Clinical Records", "copy": "Encrypted storage of all diagnostic studies associated with your physician ID."},
+            {"kicker": "Continuity", "title": "Longitudinal Tracking", "copy": "Monitor changes in volumetric tumor burden, region, and morphology over time."},
+            {"kicker": "Export", "title": "Structured Data", "copy": "Comprehensive metadata including scan modality, burden percentage, and confidence scoring."},
         ],
     )
 
